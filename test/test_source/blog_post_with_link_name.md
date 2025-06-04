@@ -1,5 +1,5 @@
 ---
-date: 2025-05-26 18:46
+date: 2025-06-01 18:46
 tags:
   - thoughts
   - blog
