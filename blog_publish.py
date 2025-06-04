@@ -31,8 +31,8 @@ except ImportError:
 
 SOURCE_MD_DIR = Path("~/Dropbox/bin/obsidian/test/test_source").expanduser()
 SOURCE_IMG_DIR = Path("~/Dropbox/bin/obsidian/test/test_image").expanduser()
-DEST_MD_DIR   = Path("~/Dropbox/bin/obsidian/test/_post").expanduser()
-DEST_IMG_DIR  = Path("~/Dropbox/bin/obsidian/test/image").expanduser()
+DEST_MD_DIR   = Path("~/Dropbox/bin/obsidian/test/_posts").expanduser()
+DEST_IMG_DIR  = Path("~/Dropbox/bin/obsidian/test/images").expanduser()
 
 # Default fallback image (relative to your site root)
 DEFAULT_TITLE_IMAGE = "/images/default_title_image.png"
@@ -52,9 +52,15 @@ WIKILINK_PATTERN = re.compile(r"\[\[([^|\]]+)(?:\|([^\]]+))?\]\]")
 
 # --------------------------- Helper functions --------------------------------
 
-def build_new_frontmatter(original: Dict) -> Dict:
-    """Return a base Jekyll front‑matter dict (title‑image added later)."""
-    title = original.get("title") or original.get("slug") or original.get("file_stem", "Untitled")
+def build_new_frontmatter(original: Dict, fallback_title: str) -> Dict:
+    """Return a base Jekyll front‑matter dict (title‑image added later).
+
+    The title is resolved in this order:
+      1. `title` field from original front‑matter (if present)
+      2. `slug` field from original front‑matter
+      3. *fallback_title* derived from the filename (spaces instead of dashes)
+    """
+    title = original.get("title") or original.get("slug") or fallback_title
     return {
         "layout": "post",
         "categories": "blog",
@@ -118,8 +124,11 @@ def process_file(md_path: Path):
     # Transform body & detect first image
     transformed_body, first_img = transform_content(post.content)
 
+    # Derive a nice fallback title from filename (convert dashes/underscores to spaces)
+    fallback_title = md_path.stem.replace("-", " ").replace("_", " ").title()
+
     # Assemble new front‑matter
-    new_fm = build_new_frontmatter(post.metadata)
+    new_fm = build_new_frontmatter(post.metadata, fallback_title)
     new_fm["title-image"] = first_img or DEFAULT_TITLE_IMAGE
 
     new_post = frontmatter.Post(transformed_body, **new_fm)
@@ -131,8 +140,9 @@ def process_file(md_path: Path):
 
     DEST_MD_DIR.mkdir(parents=True, exist_ok=True)
     dest_path = DEST_MD_DIR / dest_filename
+    # Write using frontmatter.dumps → returns str, so no bytes/text mismatch
     with dest_path.open("w", encoding="utf-8") as f:
-        frontmatter.dump(new_post, f)
+        f.write(frontmatter.dumps(new_post))
 
     print(
         f"✓ {md_path.name} → {dest_path.relative_to(DEST_MD_DIR.parent)} "
