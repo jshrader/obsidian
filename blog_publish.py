@@ -4,7 +4,8 @@ Jekyll‑ready posts while:
 
 1. Replacing the entire front‑matter with a Jekyll template you control.
 2. Copying Obsidian‑style embedded images (`![[image.png|500]]`) into a target
-   assets folder and converting the syntax to standard Markdown.
+   assets folder and converting the syntax to standard Markdown (preserving any
+   explicit size like `|500` → `{: width="500" }`).
 3. Turning Obsidian wiki‑links (`[[Page]]`, `[[Page|Display]]`) into plain text:
       • Use the *display text* (`Display`) if provided.
       • Otherwise emit the page name without the surrounding brackets.
@@ -43,8 +44,9 @@ WIKILINK_REPLACEMENTS: Dict[str, str] = {}
 
 # -----------------------------------------------------------------------------
 
-# ![[image.png|500]] or ![[image.png]]
-IMAGE_PATTERN = re.compile(r"!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]")
+# ![[image.png|500]]  → group(1)=image.png, group(2)=500
+# ![[image.png]]      → group(1)=image.png, group(2)=None
+IMAGE_PATTERN = re.compile(r"!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
 
 # [[Page]]            → group(1) = Page, group(2) = None
 # [[Page|Display]]    → group(1) = Page, group(2) = Display
@@ -53,13 +55,7 @@ WIKILINK_PATTERN = re.compile(r"\[\[([^|\]]+)(?:\|([^\]]+))?\]\]")
 # --------------------------- Helper functions --------------------------------
 
 def build_new_frontmatter(original: Dict, fallback_title: str) -> Dict:
-    """Return a base Jekyll front‑matter dict (title‑image added later).
-
-    The title is resolved in this order:
-      1. `title` field from original front‑matter (if present)
-      2. `slug` field from original front‑matter
-      3. *fallback_title* derived from the filename (spaces instead of dashes)
-    """
+    """Return a base Jekyll front‑matter dict (title‑image added later)."""
     title = original.get("title") or original.get("slug") or fallback_title
     return {
         "layout": "post",
@@ -93,9 +89,14 @@ def transform_content(body: str) -> Tuple[str, Optional[str]]:
     def _img_repl(match):
         nonlocal first_image_path
         img_name = match.group(1).strip()
+        size_spec = match.group(2)  # could be None
         new_path = extract_and_copy_image(img_name)
         if first_image_path is None:
             first_image_path = new_path
+
+        # Build Markdown with optional kramdown width attribute
+        if size_spec and size_spec.isdigit():
+            return f"![{img_name}]({new_path}){{: width=\"{size_spec}\" }}"
         return f"![{img_name}]({new_path})"
 
     body = IMAGE_PATTERN.sub(_img_repl, body)
@@ -140,7 +141,6 @@ def process_file(md_path: Path):
 
     DEST_MD_DIR.mkdir(parents=True, exist_ok=True)
     dest_path = DEST_MD_DIR / dest_filename
-    # Write using frontmatter.dumps → returns str, so no bytes/text mismatch
     with dest_path.open("w", encoding="utf-8") as f:
         f.write(frontmatter.dumps(new_post))
 
