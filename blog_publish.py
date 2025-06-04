@@ -44,11 +44,11 @@ WIKILINK_REPLACEMENTS: Dict[str, str] = {}
 # -----------------------------------------------------------------------------
 
 # ![[image.png|500]] or ![[image.png]]
-IMAGE_PATTERN = re.compile(r"!\\[\\[([^|\\]]+)(?:\\|[^\\]]*)?\\]\\]")
+IMAGE_PATTERN = re.compile(r"!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]")
 
 # [[Page]]            → group(1) = Page, group(2) = None
 # [[Page|Display]]    → group(1) = Page, group(2) = Display
-WIKILINK_PATTERN = re.compile(r"\\[\\[([^|\\]]+)(?:\\|([^\\]]+))?\\]\\]")
+WIKILINK_PATTERN = re.compile(r"\[\[([^|\]]+)(?:\|([^\]]+))?\]\]")
 
 # --------------------------- Helper functions --------------------------------
 
