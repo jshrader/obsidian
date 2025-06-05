@@ -32,10 +32,16 @@ except ImportError:
 
 # ---------- CONFIG ------------------------------------------------------------
 
-SOURCE_MD_DIR = Path("~/Dropbox/bin/obsidian/test/test_source").expanduser()
-SOURCE_IMG_DIR = Path("~/Dropbox/bin/obsidian/test/test_image").expanduser()
-DEST_MD_DIR   = Path("~/Dropbox/bin/obsidian/test/_posts").expanduser()
-DEST_IMG_DIR  = Path("~/Dropbox/bin/obsidian/test/images").expanduser()
+# TO DO: Write explicit testing code. For now, if you want to test, use these
+# directories
+#SOURCE_MD_DIR = Path("~/Dropbox/bin/obsidian/test/test_source").expanduser()
+#SOURCE_IMG_DIR = Path("~/Dropbox/bin/obsidian/test/test_image").expanduser()
+#DEST_MD_DIR   = Path("~/Dropbox/bin/obsidian/test/_posts").expanduser()
+#DEST_IMG_DIR  = Path("~/Dropbox/bin/obsidian/test/images").expanduser()
+SOURCE_MD_DIR = Path("~/Dropbox/documents/Networked Notes/all").expanduser()
+SOURCE_IMG_DIR = Path("~/Dropbox/documents/Networked Notes/files").expanduser()
+DEST_MD_DIR   = Path("~/Dropbox/bin/web/jshrader.github.io/_posts").expanduser()
+DEST_IMG_DIR  = Path("~/Dropbox/bin/web/jshrader.github.io/images").expanduser()
 
 # Default fallback image (relative to your site root)
 DEFAULT_TITLE_IMAGE = "/images/default_title_image.png"
