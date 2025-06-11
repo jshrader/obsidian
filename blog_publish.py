@@ -53,7 +53,7 @@ EXCERPT_MAX = 500
 
 IMAGE_PATTERN = re.compile(r"!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
 WIKILINK_PATTERN = re.compile(r"\[\[([^|\]]+)(?:\|([^\]]+))?\]\]")
-DRAFT_PATTERN = re.compile(r"<draft>[\s\S]*?<\\/?draft>", flags=re.IGNORECASE)
+DRAFT_PATTERN = re.compile(r"<--draft-->[\s\S]*?<\\/?--draft-->", flags=re.IGNORECASE)
 
 # --------------------------- Helper functions --------------------------------
 
