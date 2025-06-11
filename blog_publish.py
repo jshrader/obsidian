@@ -10,7 +10,10 @@ Jekyll‑ready posts while:
 3. Turning Obsidian wiki‑links (`[[Page]]`, `[[Page|Display]]`) into plain text.
 4. Copying/overwriting **only** when the source file is newer than the most
    recent exported version (mtime check).
-5. Deriving and storing an **excerpt** (first real paragraph) in front‑matter.
+5. Deriving and storing an **excerpt** (first real paragraph) in front‑matter—
+   clipped at the nearest sentence boundary (up to `EXCERPT_MAX` chars).
+6. **NEW:** Removing any draft blocks delimited by `<draft>` … `</draft>` (or
+   `<draft>` … `<\draft>`), so unfinished sections never reach production.
 
 ### Date handling
 `date:` may be a full timestamp, a simple date, or absent; all normalised.
@@ -33,19 +36,24 @@ SOURCE_MD_DIR = Path("~/Dropbox/documents/Networked Notes/all").expanduser()
 SOURCE_IMG_DIR = Path("~/Dropbox/documents/Networked Notes/files").expanduser()
 DEST_MD_DIR   = Path("~/Dropbox/bin/web/jshrader.github.io/_posts").expanduser()
 DEST_IMG_DIR  = Path("~/Dropbox/bin/web/jshrader.github.io/images").expanduser()
+
 # Testing directories (keep commented!)
-#SOURCE_MD_DIR = Path("~/Dropbox/bin/obsidian/test/test_source").expanduser()
-#SOURCE_IMG_DIR = Path("~/Dropbox/bin/obsidian/test/test_image").expanduser()
-#DEST_MD_DIR   = Path("~/Dropbox/bin/obsidian/test/_posts").expanduser()
-#DEST_IMG_DIR  = Path("~/Dropbox/bin/obsidian/test/images").expanduser()
+# SOURCE_MD_DIR = Path("~/Dropbox/bin/obsidian/test/test_source").expanduser()
+# SOURCE_IMG_DIR = Path("~/Dropbox/bin/obsidian/test/test_image").expanduser()
+# DEST_MD_DIR   = Path("~/Dropbox/bin/obsidian/test/_posts").expanduser()
+# DEST_IMG_DIR  = Path("~/Dropbox/bin/obsidian/test/images").expanduser()
 
 DEFAULT_TITLE_IMAGE = "/images/default_title_image.png"
 WIKILINK_REPLACEMENTS: Dict[str, str] = {}
+
+# Maximum characters for excerpt; adjust to taste. If None, no hard cap.
+EXCERPT_MAX = 500
 
 # -----------------------------------------------------------------------------
 
 IMAGE_PATTERN = re.compile(r"!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
 WIKILINK_PATTERN = re.compile(r"\[\[([^|\]]+)(?:\|([^\]]+))?\]\]")
+DRAFT_PATTERN = re.compile(r"<draft>[\s\S]*?<\\/?draft>", flags=re.IGNORECASE)
 
 # --------------------------- Helper functions --------------------------------
 
@@ -85,9 +93,13 @@ def extract_and_copy_image(img_name: str) -> Optional[str]:
 
 
 def transform_content(body: str) -> Tuple[str, Optional[str]]:
-    """Return (transformed_body, first_valid_image_path)."""
+    """Return (clean_body, first_valid_image_path)."""
+    # 0) Strip draft sections first
+    body = DRAFT_PATTERN.sub("", body)
+
     first_image_path: Optional[str] = None
 
+    # 1) Images
     def _img_repl(match):
         nonlocal first_image_path
         img_name = match.group(1).strip()
@@ -96,13 +108,14 @@ def transform_content(body: str) -> Tuple[str, Optional[str]]:
         if new_path and first_image_path is None:
             first_image_path = new_path
         if new_path is None:
-            return match.group(0)
+            return match.group(0)  # keep broken reference visible
         if size_spec and size_spec.isdigit():
             return f"![{img_name}]({new_path}){{: width=\"{size_spec}\" }}"
         return f"![{img_name}]({new_path})"
 
     body = IMAGE_PATTERN.sub(_img_repl, body)
 
+    # 2) Wiki‑links
     def _wiki_repl(match):
         page, display = match.group(1).strip(), match.group(2)
         return display.strip() if display else WIKILINK_REPLACEMENTS.get(page, page)
@@ -111,24 +124,28 @@ def transform_content(body: str) -> Tuple[str, Optional[str]]:
     return body, first_image_path
 
 
+def _sentence_clip(text: str, limit: Optional[int]) -> str:
+    if limit is None or len(text) <= limit:
+        return text
+    cutoff = text.rfind('.', 0, limit)
+    return (text[:cutoff + 1] if cutoff != -1 else text[:limit]).rstrip()
+
+
 def extract_excerpt(markdown_body: str) -> str:
-    """Return first paragraph that is not a header or image."""
     lines = markdown_body.splitlines()
-    buffer = []
-    collecting = False
+    para_lines, in_para = [], False
     for line in lines:
         stripped = line.strip()
         if not stripped:
-            if collecting and buffer:
-                break  # end of first paragraph
-            continue  # skip consecutive blank lines
-        # skip headers (starting with #) and images (![) or link-only lines
-        if stripped.startswith("#") or stripped.startswith("!["):
+            if in_para and para_lines:
+                break
             continue
-        # start collecting paragraph
-        collecting = True
-        buffer.append(stripped)
-    return " ".join(buffer)[:280]  # Jekyll often truncates to  excerpt_separator; keep reasonable length
+        if stripped.startswith('#') or stripped.startswith('!['):
+            continue
+        in_para = True
+        para_lines.append(stripped)
+    paragraph = ' '.join(para_lines).strip()
+    return _sentence_clip(paragraph, EXCERPT_MAX)
 
 # ------------------------------ Main pipeline --------------------------------
 
@@ -145,11 +162,11 @@ def process_file(md_path: Path):
     slug = md_path.stem.replace(" ", "-").lower()
     latest_dest = most_recent_dest(slug)
     if latest_dest and md_path.stat().st_mtime <= latest_dest.stat().st_mtime:
-        print(f"— {md_path.name} is up-to-date (no changes)")
+        print(f"— {md_path.name} is up‑to‑date (no changes)")
         return
 
     transformed_body, first_img = transform_content(post.content)
-    fallback_title = md_path.stem.replace("-", " ").replace("_", " ").title()
+    fallback_title = md_path.stem.replace('-', ' ').replace('_', ' ').title()
     new_fm = build_new_frontmatter(post.metadata, fallback_title)
     new_fm["title-image"] = first_img or DEFAULT_TITLE_IMAGE
     new_fm["excerpt"] = extract_excerpt(transformed_body)
