@@ -13,7 +13,7 @@ Jekyll‑ready posts while:
 5. Deriving and storing an **excerpt** (first real paragraph) in front‑matter—
    clipped at the nearest sentence boundary (up to `EXCERPT_MAX` chars).
 6. **NEW:** Removing any draft blocks delimited by `<draft>` … `</draft>` (or
-   `<draft>` … `<\draft>`), so unfinished sections never reach production.
+   `<--draft-->` … `<\--draft-->`), so unfinished sections never reach production.
 
 ### Date handling
 `date:` may be a full timestamp, a simple date, or absent; all normalised.
@@ -53,7 +53,11 @@ EXCERPT_MAX = 500
 
 IMAGE_PATTERN = re.compile(r"!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
 WIKILINK_PATTERN = re.compile(r"\[\[([^|\]]+)(?:\|([^\]]+))?\]\]")
-DRAFT_PATTERN = re.compile(r"<--draft-->[\s\S]*?<\\/?--draft-->", flags=re.IGNORECASE)
+DRAFT_PATTERN = re.compile(
+    r"<--draft-->[\s\S]*?<[/\\]--draft-->",
+    flags=re.IGNORECASE
+)
+
 
 # --------------------------- Helper functions --------------------------------
 
