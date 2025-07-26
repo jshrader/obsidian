@@ -12,8 +12,12 @@ Jekyll‑ready posts while:
    recent exported version (mtime check).
 5. Deriving and storing an **excerpt** (first real paragraph) in front‑matter—
    clipped at the nearest sentence boundary (up to `EXCERPT_MAX` chars).
-6. **NEW:** Removing any draft blocks delimited by `<draft>` … `<end draft>`, so
-   unfinished sections never reach production.
+6. Removing any draft blocks delimited by `<draft>` … `<end draft>`.
+7. **NEW:** Whenever a post is updated/created, also generate a *news* post that
+   announces the update. The announcement matches the format in
+   `2025-07-25-public-forecast-update.md`: categories `news`, layout `post`, tags
+   `[blog]`, the current timestamp, and a one‑sentence body linking to the
+   updated article.
 
 ### Date handling
 `date:` may be a full timestamp, a simple date, or absent; all normalised.
@@ -53,7 +57,6 @@ EXCERPT_MAX = 500
 
 IMAGE_PATTERN = re.compile(r"!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
 WIKILINK_PATTERN = re.compile(r"\[\[([^|\]]+)(?:\|([^\]]+))?\]\]")
-# Remove anything between <draft> ... <end draft>
 DRAFT_PATTERN = re.compile(r"<draft>[\s\S]*?<\s*end draft\s*>", flags=re.IGNORECASE)
 
 # --------------------------- Helper functions --------------------------------
@@ -95,12 +98,10 @@ def extract_and_copy_image(img_name: str) -> Optional[str]:
 
 def transform_content(body: str) -> Tuple[str, Optional[str]]:
     """Return (clean_body, first_valid_image_path)."""
-    # 0) Strip draft sections first
-    body = DRAFT_PATTERN.sub("", body)
+    body = DRAFT_PATTERN.sub("", body)  # strip draft blocks
 
     first_image_path: Optional[str] = None
 
-    # 1) Images
     def _img_repl(match):
         nonlocal first_image_path
         img_name = match.group(1).strip()
@@ -109,14 +110,13 @@ def transform_content(body: str) -> Tuple[str, Optional[str]]:
         if new_path and first_image_path is None:
             first_image_path = new_path
         if new_path is None:
-            return match.group(0)  # keep broken reference visible
+            return match.group(0)
         if size_spec and size_spec.isdigit():
             return f"![{img_name}]({new_path}){{: width=\"{size_spec}\" }}"
         return f"![{img_name}]({new_path})"
 
     body = IMAGE_PATTERN.sub(_img_repl, body)
 
-    # 2) Wiki‑links
     def _wiki_repl(match):
         page, display = match.group(1).strip(), match.group(2)
         return display.strip() if display else WIKILINK_REPLACEMENTS.get(page, page)
@@ -148,6 +148,34 @@ def extract_excerpt(markdown_body: str) -> str:
     paragraph = ' '.join(para_lines).strip()
     return _sentence_clip(paragraph, EXCERPT_MAX)
 
+# ------------------------------ Update‑post helper ---------------------------
+
+def create_update_post(title: str, slug: str):
+    """Write a news post announcing that *title*/*slug* was updated."""
+    now = datetime.now()
+    date_str = now.strftime("%Y-%m-%d %H:%M")
+    fm = {
+        "layout": "post",
+        "categories": "news",
+        "title": f"Update: {title}",
+        "date": date_str,
+        "tags": ["blog"],
+    }
+    body = f'The blog post "[{title}]({slug})" has been updated!'
+    update_post = frontmatter.Post(body, **fm)
+
+    filename_date = now.strftime("%Y-%m-%d")
+    update_filename = f"{filename_date}-{slug}-update.md"
+    dest_path = DEST_MD_DIR / update_filename
+    # Avoid clutter: if a news update with same filename already exists, append a counter
+    counter = 1
+    while dest_path.exists():
+        dest_path = DEST_MD_DIR / f"{filename_date}-{slug}-update-{counter}.md"
+        counter += 1
+    with dest_path.open("w", encoding="utf-8") as f:
+        f.write(frontmatter.dumps(update_post))
+    print(f"  ↳ update post created: {dest_path.name}")
+
 # ------------------------------ Main pipeline --------------------------------
 
 def most_recent_dest(slug: str) -> Optional[Path]:
@@ -162,10 +190,12 @@ def process_file(md_path: Path):
 
     slug = md_path.stem.replace(" ", "-").lower()
     latest_dest = most_recent_dest(slug)
-    if latest_dest and md_path.stat().st_mtime <= latest_dest.stat().st_mtime:
+    source_mtime = md_path.stat().st_mtime
+    if latest_dest and source_mtime <= latest_dest.stat().st_mtime:
         print(f"— {md_path.name} is up‑to‑date (no changes)")
         return
 
+    # ---------------- Transform & write primary post ------------------------
     transformed_body, first_img = transform_content(post.content)
     fallback_title = md_path.stem.replace('-', ' ').replace('_', ' ').title()
     new_fm = build_new_frontmatter(post.metadata, fallback_title)
@@ -173,7 +203,6 @@ def process_file(md_path: Path):
     new_fm["excerpt"] = extract_excerpt(transformed_body)
 
     new_post = frontmatter.Post(transformed_body, **new_fm)
-
     date_str = new_fm["date"].split()[0]
     dest_filename = f"{date_str}-{slug}.md"
 
@@ -186,6 +215,9 @@ def process_file(md_path: Path):
         f"✓ {md_path.name} → {dest_path.relative_to(DEST_MD_DIR.parent)} "
         f"(title-image: {new_fm['title-image']})"
     )
+
+    # ---------------- Announce update --------------------------------------
+    create_update_post(new_fm["title"], slug)
 
 
 def main():
