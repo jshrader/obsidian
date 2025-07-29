@@ -12,7 +12,7 @@ Jekyll‑ready posts while:
    recent exported version (mtime check).
 5. Deriving and storing an **excerpt** (first real paragraph) in front‑matter—
    clipped at the nearest sentence boundary (up to `EXCERPT_MAX` chars).
-6. Removing any draft blocks delimited by `<draft>` … `<end draft>`.
+6. Removing any draft blocks delimited by `{draft}` … `{end draft}`.
 7. **NEW:** Whenever a post is updated/created, also generate a *news* post that
    announces the update. The announcement matches the format in
    `2025-07-25-public-forecast-update.md`: categories `news`, layout `post`, tags
@@ -57,7 +57,7 @@ EXCERPT_MAX = 500
 
 IMAGE_PATTERN = re.compile(r"!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
 WIKILINK_PATTERN = re.compile(r"\[\[([^|\]]+)(?:\|([^\]]+))?\]\]")
-DRAFT_PATTERN = re.compile(r"<draft>[\s\S]*?<\s*end draft\s*>", flags=re.IGNORECASE)
+DRAFT_PATTERN = re.compile(r"{draft}[\s\S]*?{\s*end draft\s*}", flags=re.IGNORECASE)
 
 # --------------------------- Helper functions --------------------------------
 
