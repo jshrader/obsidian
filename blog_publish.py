@@ -187,6 +187,44 @@ def extract_last_updated(markdown_body: str, published_date) -> str:
         return published_day.isoformat()
     return _normalise_date(published_date).split()[0]
 
+
+def has_blog_tag(post) -> bool:
+    tags = post.get("tags", [])
+    if isinstance(tags, str):
+        tags = [tags]
+    return "blog" in tags
+
+
+def _normalise_title_for_match(title: str) -> str:
+    return " ".join(title.strip().split()).casefold()
+
+
+def find_post_by_title(post_title: str) -> Path:
+    wanted = _normalise_title_for_match(post_title)
+    matches = []
+
+    for md_path in SOURCE_MD_DIR.rglob("*.md"):
+        post = frontmatter.load(md_path)
+        if not has_blog_tag(post):
+            continue
+
+        candidate_titles = {_normalise_title_for_match(md_path.stem)}
+        title = post.get("title")
+        if isinstance(title, str) and title.strip():
+            candidate_titles.add(_normalise_title_for_match(title))
+
+        if wanted in candidate_titles:
+            matches.append(md_path)
+
+    if not matches:
+        raise SystemExit(f'No blog-tagged source note found for "{post_title}".')
+    if len(matches) > 1:
+        match_list = ", ".join(path.name for path in matches)
+        raise SystemExit(
+            f'Multiple blog-tagged source notes match "{post_title}": {match_list}'
+        )
+    return matches[0]
+
 # ------------------------------ Update‑post helper ---------------------------
 
 def create_update_post(title: str, slug: str):
@@ -224,7 +262,7 @@ def most_recent_dest(slug: str) -> Optional[Path]:
 
 def process_file(md_path: Path, create_update_posts: bool = False):
     post = frontmatter.load(md_path)
-    if "blog" not in post.get("tags", []):
+    if not has_blog_tag(post):
         return
 
     slug = md_path.stem.replace(" ", "-").lower()
@@ -260,23 +298,45 @@ def process_file(md_path: Path, create_update_posts: bool = False):
         create_update_post(new_fm["title"], slug)
 
 
-def parse_args():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(
         description="Export Obsidian blog-tagged notes into Jekyll posts."
+    )
+    parser.add_argument(
+        "post_title",
+        nargs="*",
+        help="title of the single blog post to export",
+    )
+    parser.add_argument(
+        "--update-all",
+        action="store_true",
+        help="export all blog-tagged posts",
     )
     parser.add_argument(
         "--create-update-posts",
         action="store_true",
         help="also generate news posts announcing updated blog posts",
     )
-    return parser.parse_args()
+    args = parser.parse_args(argv)
+
+    joined_title = " ".join(args.post_title).strip()
+    if args.update_all == bool(joined_title):
+        parser.error("provide a post title or pass --update-all")
+
+    args.post_title = joined_title or None
+    return args
 
 
 def main():
     args = parse_args()
     DEST_MD_DIR.mkdir(parents=True, exist_ok=True)
-    for md_path in SOURCE_MD_DIR.rglob("*.md"):
-        process_file(md_path, create_update_posts=args.create_update_posts)
+    if args.update_all:
+        for md_path in SOURCE_MD_DIR.rglob("*.md"):
+            process_file(md_path, create_update_posts=args.create_update_posts)
+        return
+
+    md_path = find_post_by_title(args.post_title)
+    process_file(md_path, create_update_posts=args.create_update_posts)
 
 if __name__ == "__main__":
     main()
