@@ -12,8 +12,9 @@ Jekyll‑ready posts while:
    recent exported version (mtime check).
 5. Deriving and storing an **excerpt** (first real paragraph) in front‑matter—
    clipped at the nearest sentence boundary (up to `EXCERPT_MAX` chars).
-6. Removing any draft blocks delimited by `{draft}` … `{end draft}`.
-7. **NEW:** Whenever a post is updated/created, also generate a *news* post that
+6. Recording `last_updated` from the post's footer version history.
+7. Removing any draft blocks delimited by `{draft}` … `{end draft}`.
+8. **NEW:** Whenever a post is updated/created, also generate a *news* post that
    announces the update. The announcement matches the format in
    `2025-07-25-public-forecast-update.md`: categories `news`, layout `post`, tags
    `[blog]`, the current timestamp, and a one‑sentence body linking to the
@@ -58,6 +59,10 @@ EXCERPT_MAX = 500
 IMAGE_PATTERN = re.compile(r"!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
 WIKILINK_PATTERN = re.compile(r"\[\[([^|\]]+)(?:\|([^\]]+))?\]\]")
 DRAFT_PATTERN = re.compile(r"{draft}[\s\S]*?{\s*end draft\s*}", flags=re.IGNORECASE)
+VERSION_HISTORY_PATTERN = re.compile(
+    r"Version history<br>\s*(.*?)</p>", flags=re.IGNORECASE | re.DOTALL
+)
+VERSION_HISTORY_DATE_PATTERN = re.compile(r"(?<!\d)(\d{4}-\d{2}-\d{2})(?!\d)\s*:")
 
 # --------------------------- Helper functions --------------------------------
 
@@ -69,6 +74,19 @@ def _normalise_date(raw_date) -> str:
     if isinstance(raw_date, str) and raw_date.strip():
         return raw_date.strip()
     return datetime.now().strftime("%Y-%m-%d %H:%M")
+
+
+def _coerce_to_date(raw_date) -> Optional[date]:
+    if isinstance(raw_date, datetime):
+        return raw_date.date()
+    if isinstance(raw_date, date):
+        return raw_date
+    if isinstance(raw_date, str) and raw_date.strip():
+        try:
+            return datetime.fromisoformat(raw_date.strip()).date()
+        except ValueError:
+            return None
+    return None
 
 
 def build_new_frontmatter(original: Dict, fallback_title: str) -> Dict:
@@ -148,6 +166,26 @@ def extract_excerpt(markdown_body: str) -> str:
     paragraph = ' '.join(para_lines).strip()
     return _sentence_clip(paragraph, EXCERPT_MAX)
 
+
+def extract_last_updated(markdown_body: str, published_date) -> str:
+    published_day = _coerce_to_date(published_date)
+    version_history = VERSION_HISTORY_PATTERN.search(markdown_body)
+
+    if version_history:
+        version_dates = [
+            datetime.strptime(match.group(1), "%Y-%m-%d").date()
+            for match in VERSION_HISTORY_DATE_PATTERN.finditer(version_history.group(1))
+        ]
+        if version_dates:
+            latest_version_day = max(version_dates)
+            if published_day is not None:
+                latest_version_day = max(latest_version_day, published_day)
+            return latest_version_day.isoformat()
+
+    if published_day is not None:
+        return published_day.isoformat()
+    return _normalise_date(published_date).split()[0]
+
 # ------------------------------ Update‑post helper ---------------------------
 
 def create_update_post(title: str, slug: str):
@@ -201,6 +239,7 @@ def process_file(md_path: Path):
     new_fm = build_new_frontmatter(post.metadata, fallback_title)
     new_fm["title-image"] = first_img or DEFAULT_TITLE_IMAGE
     new_fm["excerpt"] = extract_excerpt(transformed_body)
+    new_fm["last_updated"] = extract_last_updated(transformed_body, new_fm["date"])
 
     new_post = frontmatter.Post(transformed_body, **new_fm)
     date_str = new_fm["date"].split()[0]
