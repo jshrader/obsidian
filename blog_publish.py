@@ -14,8 +14,8 @@ Jekyll‑ready posts while:
    clipped at the nearest sentence boundary (up to `EXCERPT_MAX` chars).
 6. Recording `last_updated` from the post's footer version history.
 7. Removing any draft blocks delimited by `{draft}` … `{end draft}`.
-8. **NEW:** Whenever a post is updated/created, also generate a *news* post that
-   announces the update. The announcement matches the format in
+8. Optionally generating a *news* post announcing an update when the script is
+   run with `--create-update-posts`. The announcement matches the format in
    `2025-07-25-public-forecast-update.md`: categories `news`, layout `post`, tags
    `[blog]`, the current timestamp, and a one‑sentence body linking to the
    updated article.
@@ -24,6 +24,7 @@ Jekyll‑ready posts while:
 `date:` may be a full timestamp, a simple date, or absent; all normalised.
 """
 
+import argparse
 import re
 import shutil
 from datetime import datetime, date
@@ -221,7 +222,7 @@ def most_recent_dest(slug: str) -> Optional[Path]:
     return max(candidates, key=lambda p: p.stat().st_mtime) if candidates else None
 
 
-def process_file(md_path: Path):
+def process_file(md_path: Path, create_update_posts: bool = False):
     post = frontmatter.load(md_path)
     if "blog" not in post.get("tags", []):
         return
@@ -255,14 +256,27 @@ def process_file(md_path: Path):
         f"(title-image: {new_fm['title-image']})"
     )
 
-    # ---------------- Announce update --------------------------------------
-    create_update_post(new_fm["title"], slug)
+    if create_update_posts:
+        create_update_post(new_fm["title"], slug)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Export Obsidian blog-tagged notes into Jekyll posts."
+    )
+    parser.add_argument(
+        "--create-update-posts",
+        action="store_true",
+        help="also generate news posts announcing updated blog posts",
+    )
+    return parser.parse_args()
 
 
 def main():
+    args = parse_args()
     DEST_MD_DIR.mkdir(parents=True, exist_ok=True)
     for md_path in SOURCE_MD_DIR.rglob("*.md"):
-        process_file(md_path)
+        process_file(md_path, create_update_posts=args.create_update_posts)
 
 if __name__ == "__main__":
     main()
