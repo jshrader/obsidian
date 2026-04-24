@@ -83,10 +83,14 @@ def _coerce_to_date(raw_date) -> Optional[date]:
     if isinstance(raw_date, date):
         return raw_date
     if isinstance(raw_date, str) and raw_date.strip():
+        raw_date = raw_date.strip()
         try:
-            return datetime.fromisoformat(raw_date.strip()).date()
+            return datetime.fromisoformat(raw_date).date()
         except ValueError:
-            return None
+            try:
+                return date.fromisoformat(raw_date.split()[0])
+            except ValueError:
+                return None
     return None
 
 
@@ -168,7 +172,7 @@ def extract_excerpt(markdown_body: str) -> str:
     return _sentence_clip(paragraph, EXCERPT_MAX)
 
 
-def extract_last_updated(markdown_body: str, published_date) -> str:
+def extract_last_updated(markdown_body: str, published_date):
     published_day = _coerce_to_date(published_date)
     version_history = VERSION_HISTORY_PATTERN.search(markdown_body)
 
@@ -181,10 +185,10 @@ def extract_last_updated(markdown_body: str, published_date) -> str:
             latest_version_day = max(version_dates)
             if published_day is not None:
                 latest_version_day = max(latest_version_day, published_day)
-            return latest_version_day.isoformat()
+            return latest_version_day
 
     if published_day is not None:
-        return published_day.isoformat()
+        return published_day
     return _normalise_date(published_date).split()[0]
 
 
